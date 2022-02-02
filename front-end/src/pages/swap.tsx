@@ -3,36 +3,31 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import {
   Connection,
   Keypair,
-  Signer,
   PublicKey,
   Transaction,
   TransactionInstruction,
-  TransactionSignature,
   ConfirmOptions,
-  RpcResponseAndContext,
-  SimulatedTransactionResponse,
-  Commitment,
-  LAMPORTS_PER_SOL,
-  SYSVAR_CLOCK_PUBKEY,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
   clusterApiUrl
 } from '@solana/web3.js'
-import {AccountLayout,MintLayout,TOKEN_PROGRAM_ID,ASSOCIATED_TOKEN_PROGRAM_ID} from "@solana/spl-token";
-import useNotify from './notify'
-import {sendTransactionWithRetry} from './utility'
+import {AccountLayout,MintLayout,TOKEN_PROGRAM_ID,ASSOCIATED_TOKEN_PROGRAM_ID,Token} from "@solana/spl-token";
+// import useNotify from './notify'
 import * as anchor from "@project-serum/anchor";
 import {WalletConnect, WalletDisconnect} from '../wallet'
+import { Container, Snackbar } from '@material-ui/core';
+import Alert from '@material-ui/lab/Alert';
+import { CircularProgress } from '@mui/material';
 
 let wallet : any
-let conn = new Connection(clusterApiUrl('devnet'))
-let notify: any
+let conn = new Connection(clusterApiUrl('mainnet-beta'))
+// let notify: any
 
 const confirmOption : ConfirmOptions = {commitment : 'finalized',preflightCommitment : 'finalized',skipPreflight : false}
-const programId = new PublicKey('CVkpihd9wmAmCzDFrB5Bf75XczvGfGB6cLXB2TBW4m5R')
+const programId = new PublicKey('E86WfRXiK2M1vJbhBqeBWjgEpYTwJW7KJ8GTN4NqG1o8')
 const idl = require('./solana_anchor.json')
-const pool = new PublicKey('6x6cXfkYKBwAhf9B5RrqUz3nwQY8LTJXZoUUoYofMqmj')
-const TOKEN_MINT = new PublicKey('5Pdw82Xqs6kzSZf2p472LbKb4FqegtQkgoaXCnE4URfa')
+const pool = new PublicKey('AXqbf8oJxyZDLhywWbgPXej3CCohJRov5fvvxPcbMuMA')
+const TOKEN_MINT = new PublicKey('8S4TAhdeGcH4tPZZ8nM6WrW6KKvXC1dS3E4GiRFVXpYa')
 
 const createAssociatedTokenAccountInstruction = (
   associatedTokenAddress: PublicKey,
@@ -68,7 +63,6 @@ const getTokenWallet = async (
   owner: PublicKey,
   mint: PublicKey
     ) => {
-	console.log(owner.toBase58())
   return (
     await PublicKey.findProgramAddress(
       [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
@@ -77,13 +71,21 @@ const getTokenWallet = async (
   )[0];
 }
 
+interface AlertState {
+  open: boolean;
+  message: string;
+  severity: 'success' | 'info' | 'warning' | 'error' | undefined;
+  // duration: number | undefined;
+}
+
 export default function Swap(){
 	wallet = useWallet()
-	notify = useNotify()
+	// notify = useNotify()
 
 	const [sol, setSol] = useState('')
 	const [crush, setCrush] = useState('')
 	const [poolData, setPoolData] = useState<any>(null)
+  const [alertState, setAlertState] = useState<AlertState>({open: false,message: '',severity: undefined})
 
 	const getPoolData = async() => {
 		const wallet = new anchor.Wallet(Keypair.generate())
@@ -103,6 +105,8 @@ export default function Swap(){
 	  	let program = new anchor.Program(idl,programId,provider)
 	  	let tokenAddress = await getTokenWallet(wallet.publicKey, TOKEN_MINT)
 	  	let transaction = new Transaction()
+
+
 	  	if((await conn.getAccountInfo(tokenAddress)) == null){
 	  		transaction.add(createAssociatedTokenAccountInstruction(tokenAddress, wallet.publicKey, wallet.publicKey, TOKEN_MINT))
 	  	}
@@ -118,10 +122,12 @@ export default function Swap(){
 	  		}
 	  	}))
 	  	let hash = await sendTransaction(transaction, [])
-	  	notify('success', 'Success!', hash);
+	  	setAlertState({open: true, message:"Congratulations! Swap succeeded!",severity:'success'})
+	  	// notify('success', 'Success!', hash);
 	  } catch(e) {
 	  	console.log(e)
-	  	notify('error', 'Failed Instruction!');
+	  	setAlertState({open: true, message:"Swap failed! Please try again!",severity:'error'})
+	  	// notify('error', 'Failed Instruction!');
 	  }
 	}
 
@@ -136,45 +142,12 @@ export default function Swap(){
 	    let hash = await conn.sendRawTransaction(await signedTransaction.serialize());
 	    await conn.confirmTransaction(hash);
 	    return hash
-	    // notify('success', 'Success!');
-	  // } catch(err) {
-	  //   console.log(err)
-	  //   notify('error', 'Failed Instruction!');
-	  // }
 	}
 
 	useEffect(()=>{
 		getPoolData()
 	},[pool])
 
-	// return <div className="container-fluid mt-4 row">
-	// 	<div className="col-lg-6">
- //      <div className="input-group mb-3">
- //        <span className="input-group-text">Sol</span>
- //        <input name="sol"  type="text" className="form-control" onChange={(event)=>{
- //        	setSol(event.target.value)
- //        	let temp = Number(event.target.value) / poolData.coefficient
- //        	setCrush(temp.toString())
- //        }} value={sol}/>
- //      </div>
- //      <div className="input-group mb-3">
- //        <span className="input-group-text">MetaCrush</span>
- //        <input name="crush"  type="text" className="form-control" onChange={(event)=>{
- //        	setCrush(event.target.value)
- //        	let temp = Number(event.target.value) * poolData.coefficient
- //        	setSol(temp.toString())
- //        }} value={crush}/>
- //      </div>
- //      {
-	// 			wallet && wallet.connected && 
-	// 			<div className="row container-fluid">
-	// 				<button type="button" className="btn btn-primary mb3" onClick={async ()=>{
-	// 					await minting()
-	// 				}}>Mint</button>
-	// 			</div>
-	// 		}
-	// 	</div>
-	// </div>
 	return <>
 		<main className='content'>
 			<div className='card'>
@@ -200,6 +173,7 @@ export default function Swap(){
 						(wallet && wallet.connected) ?
 							<>
 								<button type="button" className="form-btn" style={{"justifyContent" : "center"}} onClick={async ()=>{
+									setAlertState({open: true, message:"Processing transaction",severity: "warning"})
 									await minting()
 								}}>Mint</button>
 								<WalletDisconnect/>
@@ -209,6 +183,19 @@ export default function Swap(){
 					}
 				</form>
 			</div>
+			<Snackbar
+        open={alertState.open}
+        autoHideDuration={alertState.severity != 'warning' ? 6000 : 100000}
+        onClose={() => setAlertState({ ...alertState, open: false })}
+      >
+        <Alert
+        	iconMapping={{warning : <CircularProgress size={24}/>}}
+          onClose={() => setAlertState({ ...alertState, open: false })}
+          severity={alertState.severity}
+        >
+          {alertState.message}
+        </Alert>
+      </Snackbar>
 		</main>
 	</>
 }

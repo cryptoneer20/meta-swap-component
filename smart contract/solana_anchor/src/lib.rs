@@ -54,6 +54,10 @@ pub mod solana_anchor {
         ) -> ProgramResult {
         msg!("+ update_price");
         let pool = &mut ctx.accounts.pool;
+        if pool.owner != *ctx.accounts.owner.key{
+            msg!("Invalid pool owner");
+            return Err(PoolError::InvalidOwner.into());
+        }
         pool.price_denominator = _price_denominator;
         pool.price_numerator = _price_numerator;
         Ok(())
@@ -64,6 +68,10 @@ pub mod solana_anchor {
         ) -> ProgramResult{
         msg!("+ change_sol_address");
         let pool = &mut ctx.accounts.pool;
+        if pool.owner != *ctx.accounts.owner.key{
+            msg!("Invalid pool owner");
+            return Err(PoolError::InvalidOwner.into());
+        }
         pool.sol_address = *ctx.accounts.sol_address.key;
         Ok(())
     }
@@ -110,6 +118,33 @@ pub mod solana_anchor {
         Ok(())
     }
 
+    pub fn redeem_token(
+        ctx : Context<RedeemToken>,
+        _amount : u64
+        ) -> ProgramResult {
+        let pool = &mut ctx.accounts.pool;
+        if pool.owner != *ctx.accounts.owner.key{
+            msg!("Invalid pool owner");
+            return Err(PoolError::InvalidOwner.into());
+        }
+        if pool.token_address != *ctx.accounts.token_sender.key {
+            msg!("Token sender must be token address of pool");
+            return Err(PoolError::InvalidTokenAccount.into());            
+        }
+        let pool_seeds = &[pool.rand.as_ref(),&[pool.bump]];
+        spl_token_transfer(
+            TokenTransferParams{
+                source : ctx.accounts.token_sender.clone(),
+                destination : ctx.accounts.token_receiver.clone(),
+                authority : pool.to_account_info().clone(),
+                authority_signer_seeds : pool_seeds,
+                token_program : ctx.accounts.token_program.clone(),
+                amount : _amount,
+            }
+        )?;
+        Ok(())
+    }
+
 }
 
 #[derive(Accounts)]
@@ -117,7 +152,7 @@ pub struct UpdatePrice<'info>{
     #[account(mut,signer)]
     owner : AccountInfo<'info>,
 
-    #[account(mut,has_one=owner)]
+    #[account(mut)]
     pool : ProgramAccount<'info,Pool>,   
 }
 
@@ -126,7 +161,7 @@ pub struct ChangeSolAddress<'info>{
     #[account(mut,signer)]
     owner : AccountInfo<'info>,
 
-    #[account(mut,has_one=owner)]
+    #[account(mut)]
     pool : ProgramAccount<'info,Pool>,  
 
     sol_address : AccountInfo<'info>,    
@@ -179,6 +214,24 @@ pub struct InitPool<'info>{
     system_program : Program<'info, System>
 }
 
+#[derive(Accounts)]
+pub struct RedeemToken<'info>{
+    #[account(mut,signer)]
+    owner : AccountInfo<'info>,
+
+    #[account(mut)]
+    pool : ProgramAccount<'info,Pool>,
+
+    #[account(mut,owner=spl_token::id())]
+    token_sender : AccountInfo<'info>,
+
+    #[account(mut,owner=spl_token::id())]
+    token_receiver : AccountInfo<'info>,
+
+    #[account(address=spl_token::id())]
+    token_program : AccountInfo<'info>,  
+}
+
 pub const POOL_SIZE : usize = 32 + 32 + 32 + 32 + 8 + 8 + 1 + 1;
 
 #[account]
@@ -215,4 +268,7 @@ pub enum PoolError {
 
     #[msg("Not enough amount")]
     NotEnoughAmount,
+
+    #[msg("Invalid Owner")]
+    InvalidOwner,
 }

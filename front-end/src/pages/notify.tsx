@@ -12,7 +12,7 @@ export default function useNotify() {
           {signature && (
             <a
               rel='noreferrer'
-              href={`https://explorer.solana.com/tx/${signature ?? ''}?cluster=devnet`}
+              href={`https://explorer.solana.com/tx/${signature ?? ''}`}
               target='_blank'>
               Transaction
             </a>
